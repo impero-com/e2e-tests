@@ -164,10 +164,11 @@ async fn run_tests(tests: &[&dyn Testable]) -> anyhow::Result<Vec<TestResult>> {
                     .await)
             })
         })
+        .buffer_unordered(tests.len() * browser_map.len())
         .fold(
             (Vec::new(), None),
             |(mut test_results, errors), result| async {
-                match (result.await, errors) {
+                match (result, errors) {
                     (Ok(test_result), errors) => {
                         test_results.push(test_result);
                         (test_results, errors)
