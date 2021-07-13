@@ -10,3 +10,13 @@ fn index() -> &'static str {
 fn rocket() -> _ {
     rocket::build().mount("/", routes![index])
 }
+
+#[test]
+fn foo() {
+    assert_eq!(4, 2 + 2);
+}
+
+#[test]
+fn bar() {
+    assert_eq!(5, 2 + 2);
+}

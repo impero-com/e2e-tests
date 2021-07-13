@@ -17,8 +17,9 @@ use std::{
 use tokio::runtime::Runtime;
 
 pub fn e2e_test_runner(tests: &[&dyn Testable]) {
-    let mut web_server = Command::new("cargo")
-        .args(["run", "-p", "web"])
+    // println!("ARGS: {:#?}", std::env::args().collect::<Vec<_>>());
+    // println!("ENV: {:#?}", std::env::vars().collect::<HashMap<_, _>>());
+    let mut web_server = Command::new("target/debug/web")
         .current_dir("..")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
