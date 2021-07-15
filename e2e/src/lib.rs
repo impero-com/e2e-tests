@@ -1,9 +1,11 @@
 #![feature(custom_test_frameworks)]
+#![feature(internal_output_capture)]
 #![test_runner(e2e_test_runner)]
 
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream, FutureExt, StreamExt};
+use pin_project::pin_project;
 use playwright::{api::Page, Playwright};
 use std::{
     any::{type_name, Any},
@@ -11,8 +13,11 @@ use std::{
     error::Error,
     fmt::{Debug, Display, Formatter},
     future::Future,
-    panic::AssertUnwindSafe,
+    panic::{catch_unwind, AssertUnwindSafe},
+    pin::Pin,
     process::{Command, Stdio},
+    sync::{Arc, Mutex},
+    task::Poll,
 };
 use tokio::runtime::Runtime;
 
@@ -156,10 +161,11 @@ async fn run_tests(tests: &[&dyn Testable]) -> anyhow::Result<Vec<TestResult>> {
                 let test_name = test.name();
                 Ok(test
                     .run(Context { page })
-                    .map(|result| TestResult {
+                    .map(|(result, output)| TestResult {
                         test_name,
                         browser_type,
                         result,
+                        output,
                     })
                     .inspect(|test_result| println!("{}", test_result))
                     .await)
@@ -197,18 +203,27 @@ struct TestResult {
     test_name: &'static str,
     browser_type: BrowserType,
     result: anyhow::Result<()>,
+    output: Vec<u8>,
 }
 
 impl Display for TestResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.result {
-            Ok(()) => write!(f, "{} in {}...\t[OK]", self.test_name, self.browser_type),
+            Ok(()) => write!(f, "{} in {}...\t[OK]", self.test_name, self.browser_type)?,
             Err(err) => write!(
                 f,
                 "{} in {}...\t[FAILED]\n{:#?}",
                 self.test_name, self.browser_type, err
-            ),
+            )?,
         }
+        if !self.output.is_empty() {
+            write!(
+                f,
+                "\n   ----- TEST STDOUT -----   \n{}\n",
+                String::from_utf8_lossy(&self.output)
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -240,25 +255,66 @@ pub struct Context {
 #[async_trait]
 pub trait Testable {
     fn name(&self) -> &'static str;
-    async fn run(&self, ctx: Context) -> Result<()>;
+    async fn run(&self, ctx: Context) -> (Result<()>, Vec<u8>);
 }
 
 #[async_trait]
 impl<F, FF> Testable for F
 where
     F: Fn(Context) -> FF + Sync,
-    FF: Send,
-    AssertUnwindSafe<FF>: Future<Output = Result<()>>,
+    FF: Future<Output = Result<()>> + Send,
 {
     fn name(&self) -> &'static str {
         type_name::<Self>()
     }
 
-    async fn run(&self, ctx: Context) -> Result<()> {
-        let result = AssertUnwindSafe(self(ctx)).catch_unwind().await;
+    async fn run(&self, ctx: Context) -> (Result<()>, Vec<u8>) {
+        let (result, output) = CaptureOutputFuture::new(self(ctx)).await;
         match result {
-            Ok(future) => future,
-            Err(err) => Err(CaughtPanic::new(err).into()),
+            Ok(test_result) => (test_result, output),
+            Err(caught_panic) => (Err(caught_panic.into()), output),
+        }
+    }
+}
+
+#[pin_project]
+#[must_use = "futures do nothing unless you `.await` or poll them"]
+struct CaptureOutputFuture<Fut> {
+    #[pin]
+    future: Fut,
+    output: Arc<Mutex<Vec<u8>>>,
+}
+
+impl<Fut> CaptureOutputFuture<Fut> {
+    fn new(future: Fut) -> Self {
+        CaptureOutputFuture {
+            future,
+            output: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+}
+
+impl<Fut: Future> Future for CaptureOutputFuture<Fut> {
+    type Output = (Result<Fut::Output, CaughtPanic>, Vec<u8>);
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        std::io::set_output_capture(Some(Arc::clone(&self.output)));
+        let this = self.project();
+        let f = this.future;
+        let o = this.output;
+        let result = catch_unwind(AssertUnwindSafe(|| f.poll(cx)));
+        std::io::set_output_capture(None);
+
+        match result {
+            Ok(Poll::Pending) => Poll::Pending,
+            Ok(Poll::Ready(value)) => Poll::Ready((
+                Ok(value),
+                std::mem::replace(o.lock().unwrap().as_mut(), Vec::new()),
+            )),
+            Err(err) => Poll::Ready((
+                Err(CaughtPanic::new(err)),
+                std::mem::replace(o.lock().unwrap().as_mut(), Vec::new()),
+            )),
         }
     }
 }
