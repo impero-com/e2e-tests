@@ -2,6 +2,9 @@
 #![feature(internal_output_capture)]
 #![test_runner(e2e_test_runner)]
 
+#[cfg(test)]
+mod tests;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream, FutureExt, StreamExt};
