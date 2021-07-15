@@ -1,11 +1,8 @@
-#![feature(custom_test_frameworks)]
-#![test_runner(e2e::e2e_test_runner)]
-
+use crate::Context;
 use anyhow::Result;
-use e2e::Context;
 
 #[test_case]
-async fn hello_world(ctx: Context) -> Result<()> {
+async fn hello_world1(ctx: Context) -> Result<()> {
     ctx.page
         .goto_builder("http://127.0.0.1:8000")
         .goto()
