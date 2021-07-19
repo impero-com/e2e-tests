@@ -162,6 +162,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "const_fn"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -322,9 +330,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "common",
  "futures",
  "pin-project",
  "playwright",
+ "serde",
+ "serde_derive",
+ "serde_json",
  "tokio",
 ]
 
@@ -1240,6 +1252,7 @@ dependencies = [
  "rocket_codegen",
  "rocket_http",
  "serde",
+ "serde_json",
  "state",
  "tempfile",
  "time 0.2.27",
@@ -1996,6 +2009,7 @@ checksum = "d7cff876b8f18eed75a66cf49b65e7f967cb354a7aa16003fb55dbfd25b44b4f"
 name = "web"
 version = "0.1.0"
 dependencies = [
+ "common",
  "rocket",
 ]
 

@@ -24,9 +24,9 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
+pub mod playwright_ext;
+
 pub fn e2e_test_runner(tests: &[&dyn Testable]) {
-    // println!("ARGS: {:#?}", std::env::args().collect::<Vec<_>>());
-    // println!("ENV: {:#?}", std::env::vars().collect::<HashMap<_, _>>());
     let mut web_server = Command::new("target/debug/web")
         .current_dir("..")
         .stdout(Stdio::null())
@@ -421,17 +421,17 @@ async fn sleep(_ctx: Context) -> Result<()> {
     Ok(())
 }
 
-#[test_case]
-async fn err(_ctx: Context) -> Result<()> {
-    use std::str::FromStr;
-    let _ = i32::from_str("Not a number")?;
-    Ok(())
-}
-
-#[test_case]
-async fn unimplemented(_ctx: Context) -> Result<()> {
-    unimplemented!()
-}
+// #[test_case]
+// async fn err(_ctx: Context) -> Result<()> {
+//     use std::str::FromStr;
+//     let _ = i32::from_str("Not a number")?;
+//     Ok(())
+// }
+//
+// #[test_case]
+// async fn unimplemented(_ctx: Context) -> Result<()> {
+//     unimplemented!()
+// }
 
 #[test_case]
 async fn hello_world(ctx: Context) -> Result<()> {
